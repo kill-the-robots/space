@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Simulation</title>
+    <style>
+        body { 
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 5px;
+            z-index: 100;
+            pointer-events: none;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        #viewToggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 1px solid white;
+            border-radius: 5px;
+            padding: 8px 12px;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+        }
+        #speedometer {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            display: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: "";
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.7);
+        }
+        #crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+            top: 0;
+        }
+        #crosshair::after {
+            width: 20px;
+            height: 2px;
+            left: 0;
+            top: 9px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Space Simulation - Use WASD to move, mouse to look around</div>
+    <div id="controls">
+        Controls:<br>
+        WASD - Move rocket<br>
+        SHIFT - Boost speed<br>
+        SPACE - Brake<br>
+        Q/E - Roll<br>
+        MOUSE - Look around<br>
+        ESC - Toggle mouse lock<br>
+        V - Switch view
+    </div>
+    <button id="viewToggle">Switch View</button>
+    <div id="speedometer">Speed: 0.0</div>
+    <div id="crosshair"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Set up the scene, camera, and renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000);
+        document.body.appendChild(renderer.domElement);
+
+        // Create star field
+        function createStars() {
+            const geometry = new THREE.BufferGeometry();
+            const vertices = [];
+            
+            for (let i = 0; i < 10000; i++) {
+                const x = (Math.random() - 0.5) * 3000;
+                const y = (Math.random() - 0.5) * 3000;
+                const z = (Math.random() - 0.5) * 3000;
+                vertices.push(x, y, z);
+            }
+            
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            const material = new THREE.PointsMaterial({
+                color: 0xFFFFFF,
+                size: 1.5,
+                sizeAttenuation: true
+            });
+            
+            const stars = new THREE.Points(geometry, material);
+            scene.add(stars);
+        }
+        
+        createStars();
+
+        // Create a rocket
+        let rocket;
+        
+        function createRocket() {
+            const rocketGroup = new THREE.Group();
+            
+            // Rocket body
+            const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 4, 16);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xC0C0C0 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            rocketGroup.add(body);
+            
+            // Rocket nose
+            const noseGeometry = new THREE.ConeGeometry(0.5, 1.5, 16);
+            const noseMaterial = new THREE.MeshPhongMaterial({ color: 0xFF0000 });
+            const nose = new THREE.Mesh(noseGeometry, noseMaterial);
+            nose.position.y = 2.75;
+            rocketGroup.add(nose);
+            
+            // Rocket fins
+            const finGeometry = new THREE.BoxGeometry(0.1, 1, 1);
+            const finMaterial = new THREE.MeshPhongMaterial({ color: 0xC0C0C0 });
+            
+            for (let i = 0; i < 4; i++) {
+                const fin = new THREE.Mesh(finGeometry, finMaterial);
+                fin.position.y = -1.5;
+                fin.position.x = Math.sin(i * Math.PI / 2) * 0.8;
+                fin.position.z = Math.cos(i * Math.PI / 2) * 0.8;
+                fin.rotation.y = i * Math.PI / 2;
+                rocketGroup.add(fin);
+            }
+            
+            // Rocket windows
+            const windowGeometry = new THREE.CircleGeometry(0.15, 16);
+            const windowMaterial = new THREE.MeshPhongMaterial({ color: 0x87CEEB });
+            
+            for (let i = 0; i < 3; i++) {
+                const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                window.position.y = 0.5 * i;
+                window.position.x = 0.49;
+                window.rotation.y = Math.PI / 2;
+                rocketGroup.add(window);
+            }
+            
+            // Thruster
+            const thrusterGeometry = new THREE.CylinderGeometry(0.3, 0.5, 0.5, 16);
+            const thrusterMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const thruster = new THREE.Mesh(thrusterGeometry, thrusterMaterial);
+            thruster.position.y = -2.25;
+            rocketGroup.add(thruster);
+            
+            // Add flame (animated in the render loop)
+            const flameGeometry = new THREE.ConeGeometry(0.3, 1.5, 16);
+            const flameMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xFF6600,
+                transparent: true,
+                opacity: 0.8
+            });
+            const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+            flame.position.y = -3;
+            flame.rotation.x = Math.PI;
+            flame.name = "flame";
+            rocketGroup.add(flame);
+            
+            // Rotate the rocket to point forward along z-axis
+            rocketGroup.rotation.x = Math.PI / 2;
+            
+            return rocketGroup;
+        }
+        
+        rocket = createRocket();
+        scene.add(rocket);
+
+        // Create planets
+        const planets = [];
+        const planetInfo = []; // Store information about planets for HUD
+        
+        function createPlanet(radius, color, posX, posY, posZ, name, ringColor = null, textureType = "solid") {
+            const planetGroup = new THREE.Group();
+            
+            // Planet sphere
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
+            let material;
+            
+            // Different texture types
+            if (textureType === "clouds") {
+                // Cloud-like material for gas giants
+                material = new THREE.MeshPhongMaterial({ 
+                    color: color,
+                    shininess: 5,
+                    transparent: true,
+                    opacity: 0.9
+                });
+            } else if (textureType === "rocky") {
+                // Rocky material for terrestrial planets
+                material = new THREE.MeshPhongMaterial({ 
+                    color: color,
+                    shininess: 20,
+                    bumpScale: 0.05
+                });
+            } else {
+                // Default solid material
+                material = new THREE.MeshPhongMaterial({ 
+                    color: color,
+                    shininess: 10
+                });
+            }
+            
+            const planet = new THREE.Mesh(geometry, material);
+            planetGroup.add(planet);
+            
+            // Add rings if specified
+            if (ringColor) {
+                const ringGeometry = new THREE.RingGeometry(radius + 0.5, radius + 2, 32);
+                const ringMaterial = new THREE.MeshBasicMaterial({ 
+                    color: ringColor, 
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.rotation.x = Math.PI / 2;
+                planetGroup.add(ring);
+            }
+            
+            planetGroup.position.set(posX, posY, posZ);
+            
+            // Add randomized rotation speed
+            planetGroup.userData = {
+                rotationSpeed: (Math.random() * 0.005) + 0.001,
+                orbitSpeed: (Math.random() * 0.001) + 0.0005,
+                orbitRadius: Math.sqrt(posX * posX + posZ * posZ),
+                orbitAngle: Math.atan2(posZ, posX),
+                name: name,
+                radius: radius
+            };
+            
+            scene.add(planetGroup);
+            planets.push(planetGroup);
+            
+            // Store planet info for distance calculation
+            planetInfo.push({
+                name: name,
+                object: planetGroup,
+                radius: radius
+            });
+            
+            return planetGroup;
+        }
+        
+        // Sun
+        const sun = createPlanet(10, 0xFFFF00, 0, 0, -100, "Sun");
+        
+        // Add a point light at the sun's position
+        const sunLight = new THREE.PointLight(0xFFFFFF, 2, 1000);
+        sunLight.position.copy(sun.position);
+        scene.add(sunLight);
+        
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0x333333);
+        scene.add(ambientLight);
+        
+        // Create various planets
+        createPlanet(2, 0x888888, 20, 0, -80, "Mercury", null, "rocky"); 
+        createPlanet(4, 0xA97C50, -40, 5, -120, "Venus", null, "clouds");
+        createPlanet(5, 0x3333FF, 60, -10, -150, "Earth", null, "rocky");
+        createPlanet(3, 0xFF3333, -80, 0, -180, "Mars", null, "rocky");
+        createPlanet(8, 0xE3C56B, 100, 15, -220, "Saturn", 0xD4BE84, "clouds");
+        createPlanet(7, 0xC5E3F5, -120, -20, -260, "Neptune", null, "clouds");
+        
+        // Add some asteroids in an asteroid belt
+        const asteroids = new THREE.Group();
+        scene.add(asteroids);
+        
+        for (let i = 0; i < 200; i++) {
+            const radius = Math.random() * 0.8 + 0.2;
+            const geometry = new THREE.IcosahedronGeometry(radius, 0);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: 0x888888,
+                shininess: 0,
+                flatShading: true
+            });
+            
+            const asteroid = new THREE.Mesh(geometry, material);
+            
+            // Position in a rough circle between Mars and Jupiter
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * 20 + 90;
+            asteroid.position.x = Math.cos(angle) * distance;
+            asteroid.position.z = Math.sin(angle) * distance - 100;
+            asteroid.position.y = (Math.random() - 0.5) * 10;
+            
+            // Random rotation
+            asteroid.rotation.x = Math.random() * Math.PI;
+            asteroid.rotation.y = Math.random() * Math.PI;
+            asteroid.rotation.z = Math.random() * Math.PI;
+            
+            // Store rotation speed for animation
+            asteroid.userData = {
+                rotSpeed: {
+                    x: (Math.random() - 0.5) * 0.01,
+                    y: (Math.random() - 0.5) * 0.01,
+                    z: (Math.random() - 0.5) * 0.01
+                },
+                orbitSpeed: Math.random() * 0.0005 + 0.0002,
+                orbitRadius: distance,
+                orbitAngle: angle
+            };
+            
+            asteroids.add(asteroid);
+        }
+        
+        // Set up mouse controls
+        let isPointerLocked = false;
+        let mouseSensitivity = 0.002;
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let moveUp = false;
+        let moveDown = false;
+        let rollLeft = false;
+        let rollRight = false;
+        let boost = false;
+        let brake = false;
+        
+        const crosshair = document.getElementById('crosshair');
+        const viewToggleBtn = document.getElementById('viewToggle');
+        const infoDisplay = document.getElementById('info');
+        const speedDisplay = document.getElementById('speedometer');
+        
+        // First-person and third-person camera views
+        let cameraMode = 'third-person'; // 'first-person' or 'third-person'
+        
+        // Pointer lock API setup
+        const onPointerLockChange = () => {
+            isPointerLocked = document.pointerLockElement === renderer.domElement;
+            if (isPointerLocked) {
+                document.addEventListener('mousemove', onMouseMove, false);
+                crosshair.style.display = cameraMode === 'first-person' ? 'block' : 'none';
+                infoDisplay.textContent = 'Press ESC to release mouse control';
+            } else {
+                document.removeEventListener('mousemove', onMouseMove, false);
+                crosshair.style.display = 'none';
+                infoDisplay.textContent = 'Click to resume control';
+            }
+        };
+        
+        document.addEventListener('pointerlockchange', onPointerLockChange, false);
+        
+        // Mouse movement handler
+        const onMouseMove = (event) => {
+            if (isPointerLocked) {
+                // Apply rotation to rocket based on mouse movement
+                const movementX = event.movementX || 0;
+                const movementY = event.movementY || 0;
+                
+                // In first-person mode, rotation affects rocket direction
+                rocket.rotateY(-movementX * mouseSensitivity);
+                
+                // Limit vertical rotation to prevent flipping
+                const currentRotationX = camera.rotation.x;
+                const newRotationX = currentRotationX - movementY * mouseSensitivity;
+                
+                // Limit vertical look in first-person mode
+                if (cameraMode === 'first-person') {
+                    camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, newRotationX));
+                }
+            }
+        };
+        
+        // Click event to request pointer lock
+        renderer.domElement.addEventListener('click', () => {
+            if (!isPointerLocked) {
+                renderer.domElement.requestPointerLock();
+            }
+        });
+        
+        // Key events
+        window.addEventListener('keydown', (e) => {
+            switch (e.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': brake = true; e.preventDefault(); break;
+                case 'KeyQ': rollLeft = true; break;
+                case 'KeyE': rollRight = true; break;
+                case 'KeyR': moveUp = true; break;
+                case 'KeyF': moveDown = true; break;
+                case 'ShiftLeft': 
+                case 'ShiftRight': boost = true; break;
+                case 'KeyV': toggleCameraView(); break;
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            switch (e.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'Space': brake = false; break;
+                case 'KeyQ': rollLeft = false; break;
+                case 'KeyE': rollRight = false; break;
+                case 'KeyR': moveUp = false; break;
+                case 'KeyF': moveDown = false; break;
+                case 'ShiftLeft': 
+                case 'ShiftRight': boost = false; break;
+            }
+        });
+        
+        // Toggle camera view
+        viewToggleBtn.addEventListener('click', toggleCameraView);
+        
+        function toggleCameraView() {
+            cameraMode = cameraMode === 'first-person' ? 'third-person' : 'first-person';
+            
+            if (cameraMode === 'first-person') {
+                infoDisplay.textContent = 'First-person view';
+                crosshair.style.display = isPointerLocked ? 'block' : 'none';
+            } else {
+                infoDisplay.textContent = 'Third-person view';
+                crosshair.style.display = 'none';
+            }
+            
+            // Reset camera rotation when switching views
+            camera.rotation.set(0, 0, 0);
+        }
+        
+        // Set initial camera position
+        camera.position.z = 15;
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Movement and physics variables
+        let speed = 0;
+        let velocity = new THREE.Vector3();
+        const MAX_SPEED = 0.8;
+        const BOOST_SPEED = 2.0;
+        const ACCELERATION = 0.02;
+        const DECELERATION = 0.01;
+        const ROLL_SPEED = 0.03;
+        
+        // Find nearest planet and distance
+        function findNearestPlanet() {
+            let nearest = null;
+            let minDistance = Infinity;
+            
+            planetInfo.forEach(planet => {
+                const distance = rocket.position.distanceTo(planet.object.position) - planet.radius;
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearest = planet;
+                }
+            });
+            
+            return { planet: nearest, distance: minDistance };
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Calculate target speed based on input
+            let targetSpeed = 0;
+            
+            if (moveForward) targetSpeed = boost ? BOOST_SPEED : MAX_SPEED;
+            if (moveBackward) targetSpeed = -MAX_SPEED / 2;
+            if (brake) targetSpeed = 0;
+            
+            // Smoothly adjust current speed
+            if (Math.abs(speed - targetSpeed) > 0.01) {
+                if (speed < targetSpeed) {
+                    speed += ACCELERATION;
+                } else {
+                    speed -= brake ? ACCELERATION * 3 : DECELERATION;
+                }
+            } else {
+                speed = targetSpeed;
+            }
+            
+            // Update speedometer
+            speedDisplay.textContent = `Speed: ${speed.toFixed(1)}`;
+            
+            // Calculate movement direction
+            const direction = new THREE.Vector3(0, 0, -1);
+            direction.applyQuaternion(rocket.quaternion);
+            direction.normalize();
+            
+            // Apply velocity
+            velocity.copy(direction).multiplyScalar(speed);
+            rocket.position.add(velocity);
+            
+            // Handle strafing and vertical movement
+            if (moveLeft || moveRight || moveUp || moveDown) {
+                const strafeVector = new THREE.Vector3();
+                
+                if (moveLeft) {
+                    const leftVector = new THREE.Vector3(1, 0, 0);
+                    leftVector.applyQuaternion(rocket.quaternion);
+                    strafeVector.add(leftVector);
+                }
+                
+                if (moveRight) {
+                    const rightVector = new THREE.Vector3(-1, 0, 0);
+                    rightVector.applyQuaternion(rocket.quaternion);
+                    strafeVector.add(rightVector);
+                }
+                
+                if (moveUp) {
+                    const upVector = new THREE.Vector3(0, 1, 0);
+                    upVector.applyQuaternion(rocket.quaternion);
+                    strafeVector.add(upVector);
+                }
+                
+                if (moveDown) {
+                    const downVector = new THREE.Vector3(0, -1, 0);
+                    downVector.applyQuaternion(rocket.quaternion);
+                    strafeVector.add(downVector);
+                }
+                
+                strafeVector.normalize().multiplyScalar(MAX_SPEED * 0.5);
+                rocket.position.add(strafeVector);
+            }
+            
+            // Handle rolling
+            if (rollLeft) {
+                rocket.rotateZ(ROLL_SPEED);
+            }
+            if (rollRight) {
+                rocket.rotateZ(-ROLL_SPEED);
+            }
+            
+            // Update flame size based on speed
+            const flame = rocket.getObjectByName("flame");
+            if (flame) {
+                flame.scale.y = 0.5 + Math.abs(speed) * 2;
+                flame.material.opacity = 0.4 + Math.abs(speed) * 0.6;
+                // Change flame color at high speeds
+                if (speed > MAX_SPEED * 1.5) {
+                    flame.material.color.setHex(0x00FFFF); // Blue flame for boost
+                } else {
+                    flame.material.color.setHex(0xFF6600); // Normal orange flame
+                }
+            }
+            
+            // Position camera based on view mode
+            if (cameraMode === 'first-person') {
+                // First-person view from inside the rocket
+                const fpOffset = new THREE.Vector3(0, 0.5, 0);
+                fpOffset.applyQuaternion(rocket.quaternion);
+                camera.position.copy(rocket.position).add(fpOffset);
+                camera.quaternion.copy(rocket.quaternion);
+            } else {
+                // Third-person view following the rocket
+                const tpOffset = new THREE.Vector3(0, 3, 15);
+                tpOffset.applyQuaternion(rocket.quaternion);
+                camera.position.copy(rocket.position).add(tpOffset);
+                camera.lookAt(rocket.position);
+            }
+            
+            // Find and display nearest planet info
+            const nearestPlanetInfo = findNearestPlanet();
+            if (nearestPlanetInfo.planet) {
+                const distanceText = nearestPlanetInfo.distance.toFixed(1);
+                infoDisplay.textContent = 
+                    `${cameraMode === 'first-person' ? 'First-person' : 'Third-person'} view - ` +
+                    `Nearest planet: ${nearestPlanetInfo.planet.name} (${distanceText} units)`;
+            }
+            
+            // Update planet rotations and orbits
+            planets.forEach(planet => {
+                planet.rotateY(planet.userData.rotationSpeed);
+                
+                // Orbit around the sun (except the sun itself)
+                if (planet !== sun) {
+                    planet.userData.orbitAngle += planet.userData.orbitSpeed;
+                    const newX = Math.cos(planet.userData.orbitAngle) * planet.userData.orbitRadius;
+                    const newZ = Math.sin(planet.userData.orbitAngle) * planet.userData.orbitRadius;
+                    planet.position.x = newX;
+                    planet.position.z = newZ - 100; // Offset by sun position
+                }
+            });
+            
+            // Update asteroid rotations and orbits
+            asteroids.children.forEach(asteroid => {
+                // Rotate asteroid
+                asteroid.rotation.x += asteroid.userData.rotSpeed.x;
+                asteroid.rotation.y += asteroid.userData.rotSpeed.y;
+                asteroid.rotation.z += asteroid.userData.rotSpeed.z;
+                
+                // Orbit around the sun
+                asteroid.userData.orbitAngle += asteroid.userData.orbitSpeed;
+                const newX = Math.cos(asteroid.userData.orbitAngle) * asteroid.userData.orbitRadius;
+                const newZ = Math.sin(asteroid.userData.orbitAngle) * asteroid.userData.orbitRadius;
+                asteroid.position.x = newX;
+                asteroid.position.z = newZ - 100;
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
